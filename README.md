@@ -75,4 +75,3 @@ Copia `.env.example` a `.env` y complétalo. Nunca subas `.env` ni pegues claves
 | `SITE_DOMAIN` | Dominio del backend detrás de Caddy |
 | `BACKEND_ORIGIN` | **Solo en Vercel**: origen HTTPS del backend PHP |
 
-ados y medidas de seguridad está en `documento_tecnico.md` y `Documento_Tecnico_Final.docx`.
