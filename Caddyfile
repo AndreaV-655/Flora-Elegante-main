@@ -1,0 +1,12 @@
+{$SITE_DOMAIN} {
+    request_body {
+        max_size 8MB
+    }
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    reverse_proxy web:80
+}

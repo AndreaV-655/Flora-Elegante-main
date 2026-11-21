@@ -1,0 +1,15 @@
+FROM php:8.3-apache
+RUN apt-get update && apt-get install -y libpq-dev libonig-dev libcurl4-openssl-dev \
+    && docker-php-ext-install pdo_pgsql mbstring curl \
+    && a2enmod headers rewrite \
+    && sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
+    && rm -rf /var/lib/apt/lists/*
+COPY api /var/www/html/api
+COPY js /var/www/html/js
+COPY css /var/www/html/css
+COPY img /var/www/html/img
+COPY vendor /var/www/html/vendor
+COPY *.html .htaccess /var/www/html/
+RUN printf 'post_max_size=8M\nmax_execution_time=120\n' > /usr/local/etc/php/conf.d/flora.ini \
+    && chown -R www-data:www-data /var/www/html /var/lib/php/sessions
+USER www-data

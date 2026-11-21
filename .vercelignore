@@ -1,0 +1,12 @@
+.env*
+!.env.example
+.venv/
+api/
+engine/
+sql/
+private/
+tests/
+documentacion/
+*.docx
+*.log
+__pycache__/

@@ -1,0 +1,47 @@
+# ============================================================
+# DESARROLLO · evita que el navegador sirva HTML/JS/CSS viejos
+# ------------------------------------------------------------
+# Sin esto, Apache responde los estáticos sin Cache-Control y el
+# navegador los guarda por heurística: al editar auth.js, admin.js,
+# etc. se seguía viendo la versión anterior.
+#
+# En un servidor público se puede quitar (o cambiar por caché con
+# expiración) para aprovechar el rendimiento.
+# ============================================================
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    <FilesMatch "\.(html|js|css)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header unset ETag
+    </FilesMatch>
+</IfModule>
+FileETag None
+
+# ============================================================
+# SEGURIDAD · no listar directorios ni servir archivos internos
+# ------------------------------------------------------------
+# Sin -Indexes, Apache genera un índice de carpetas sin index
+# (img/, sql/, ...) exponiendo su contenido.
+# ============================================================
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Las imágenes de visión/facturas se sirven solo desde el motor con token.
+    RewriteRule ^(?:private|engine/private)/ - [F,L]
+    # Los controladores son internos: solo se ejecutan desde index.php.
+    RewriteCond %{REQUEST_URI} ^/api/
+    RewriteCond %{REQUEST_URI} !^/api/index\.php$
+    RewriteRule ^api/ - [F,L]
+</IfModule>
+<FilesMatch "^(\.env.*|compose.*\.ya?ml|Dockerfile.*|Caddyfile|requirements.*|.*\.py)$">
+    Require all denied
+</FilesMatch>
+
+# El respaldo de la BD, la documentación y los logs del servidor
+# no deben ser públicos.
+<FilesMatch "\.(sql|md|docx|log)$">
+    Require all denied
+</FilesMatch>

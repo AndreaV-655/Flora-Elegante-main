@@ -1,0 +1,194 @@
+<?php
+// ============================================================
+// AUTENTICACIÓN: login, registro, sesión, perfil
+// ============================================================
+require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/intentos_login.php';
+
+// Garantiza (solo crea lo que falte) roles, admin y cliente demo con sus
+// pedidos de ejemplo. Sin esto, con una BD recién importada no habría
+// cuentas para iniciar sesión.
+// Solo crear cuentas y pedidos demo cuando se habilita explícitamente.
+if (getenv('DEMO_MODE') === '1') bootstrap();
+
+$action = $_GET['action'] ?? ($_POST['action'] ?? 'me');
+
+switch ($action) {
+
+    case 'login': {
+        session_boot();
+        $d = body();
+        $email = strtolower(trim($d['email'] ?? ''));
+        $pass  = $d['password'] ?? '';
+
+        if (login_bloqueado($email)) {
+            json_error('Demasiados intentos fallidos. Espera 15 minutos o recupera tu acceso.', 429);
+        }
+
+        $st = db()->prepare("SELECT u.id, u.nombre, u.email, u.password_hash, r.nombre AS rol
+                             FROM usuario u JOIN rol r ON r.id = u.rol_id
+                             WHERE u.email = ? AND u.activo = 1");
+        $st->execute([$email]);
+        $u = $st->fetch();
+        if (!$u || !password_verify($pass, $u['password_hash'])) {
+            // Fallo de login: queda en la bitácora de intentos.
+            login_registrar($email, false);
+            json_error('Correo o contraseña incorrectos.', 401);
+        }
+
+        login_registrar($email, true);
+
+        // Anti fijación de sesión: nuevo ID tras autenticar.
+        if (session_status() === PHP_SESSION_ACTIVE) session_regenerate_id(true);
+
+        $_SESSION['usuario'] = [
+            'id'     => (int)$u['id'],
+            'nombre' => $u['nombre'],
+            'email'  => $u['email'],
+            'rol'    => $u['rol'],
+        ];
+        db()->prepare("UPDATE usuario SET ultimo_acceso = NOW() WHERE id = ?")->execute([$u['id']]);
+
+        json_out(['ok' => true, 'usuario' => $_SESSION['usuario']]);
+    }
+
+    case 'register': {
+        $d = body();
+        $nombre = trim($d['nombre'] ?? '');
+        $email  = strtolower(trim($d['email'] ?? ''));
+        $pass   = $d['password'] ?? '';
+
+        if (!$nombre || !$email || !$pass) json_error('Completa todos los campos obligatorios.', 400);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) json_error('Correo electrónico no válido.', 400);
+        // Registro restringido: solo cuentas de Gmail (se usan para enviar la factura).
+        if (!preg_match('/@gmail\.com$/i', $email)) {
+            json_error('Solo aceptamos cuentas de Gmail (ej. nombre@gmail.com).', 400);
+        }
+        if (strlen($pass) < 8 || !preg_match('/[A-Z]/', $pass) || !preg_match('/[a-z]/', $pass) || !preg_match('/\d/', $pass)) {
+            json_error('La contraseña debe tener 8+ caracteres con mayúscula, minúscula y número.', 400);
+        }
+
+        $db = db();
+        $st = $db->prepare("SELECT id FROM usuario WHERE email = ?");
+        $st->execute([$email]);
+        if ($st->fetch()) json_error('Ya existe una cuenta con ese correo.', 409);
+
+        $st = $db->prepare("SELECT id FROM rol WHERE nombre = 'cliente'");
+        $st->execute();
+        $rol = $st->fetch();
+
+        $db->prepare("INSERT INTO usuario (nombre, email, password_hash, rol_id) VALUES (?, ?, ?, ?)")
+           ->execute([$nombre, $email, password_hash($pass, PASSWORD_DEFAULT), $rol['id']]);
+        $userId = (int)$db->lastInsertId();
+
+        // Perfil opcional (la fecha de nacimiento se valida Y-m-d o queda NULL)
+        $nac = trim((string)($d['nacimiento'] ?? ''));
+        $nacimiento = ($nac !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $nac)) ? $nac : null;
+        $db->prepare("INSERT INTO cliente_perfil (usuario_id, telefono, direccion, fecha_nacimiento, preferencias_florales, identificacion, metodo_pago)
+                      VALUES (?, ?, ?, ?, ?, ?, ?)")
+           ->execute([
+               $userId,
+               $d['telefono'] ?? null,
+               $d['direccion'] ?? null,
+               $nacimiento,
+               $d['preferencias'] ?? null,
+               $d['identificacion'] ?? null,
+               $d['pago'] ?? null,
+           ]);
+
+        session_boot();
+
+        // Anti fijación de sesión: nuevo ID tras registrar.
+        if (session_status() === PHP_SESSION_ACTIVE) session_regenerate_id(true);
+
+        $_SESSION['usuario'] = ['id' => $userId, 'nombre' => $nombre, 'email' => $email, 'rol' => 'cliente'];
+
+        json_out(['ok' => true, 'usuario' => $_SESSION['usuario']]);
+    }
+
+    case 'me': {
+        $u = usuario_actual();
+        if (!$u) json_error('Sin sesión.', 401);
+        json_out(['ok' => true, 'usuario' => $u]);
+    }
+
+    case 'logout': {
+        session_boot();
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+        }
+        session_destroy();
+        json_out(['ok' => true]);
+    }
+
+    case 'profile': {
+        $u = require_auth();
+        $db = db();
+        $st = $db->prepare("SELECT telefono, direccion, fecha_nacimiento, preferencias_florales, metodo_pago
+                            FROM cliente_perfil WHERE usuario_id = ?");
+        $st->execute([$u['id']]);
+        $perfil = $st->fetch() ?: [];
+        json_out(['ok' => true, 'nombre' => $u['nombre'], 'email' => $u['email'], 'perfil' => $perfil]);
+    }
+
+    case 'update_perfil': {
+        $u = require_auth();
+        $d = body();
+        $db = db();
+
+        if (!empty($d['nombre'])) {
+            $db->prepare("UPDATE usuario SET nombre = ? WHERE id = ?")->execute([trim($d['nombre']), $u['id']]);
+            $_SESSION['usuario']['nombre'] = trim($d['nombre']);
+        }
+
+        // La fecha de nacimiento se valida Y-m-d o queda NULL.
+        $nac = trim((string)($d['nacimiento'] ?? ''));
+        $nacimiento = ($nac !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $nac)) ? $nac : null;
+
+        // identificacion también se actualiza (antes se perdía).
+        $db->prepare("INSERT INTO cliente_perfil (usuario_id, telefono, direccion, fecha_nacimiento, preferencias_florales, identificacion, metodo_pago)
+                      VALUES (?, ?, ?, ?, ?, ?, ?)
+                      ON CONFLICT (usuario_id) DO UPDATE SET telefono = EXCLUDED.telefono, direccion = EXCLUDED.direccion,
+                        fecha_nacimiento = EXCLUDED.fecha_nacimiento, preferencias_florales = EXCLUDED.preferencias_florales,
+                        identificacion = EXCLUDED.identificacion, metodo_pago = EXCLUDED.metodo_pago")
+           ->execute([
+               $u['id'],
+               $d['telefono'] ?? null,
+               $d['direccion'] ?? null,
+               $nacimiento,
+               $d['preferencias'] ?? null,
+               $d['identificacion'] ?? null,
+               $d['pago'] ?? null,
+           ]);
+
+        json_out(['ok' => true]);
+    }
+
+    case 'update_password': {
+        $u = require_auth();
+        $d = body();
+        $nueva = $d['newPassword'] ?? '';
+        if (strlen($nueva) < 8 || !preg_match('/[A-Z]/', $nueva) || !preg_match('/[a-z]/', $nueva) || !preg_match('/\d/', $nueva)) {
+            json_error('La nueva contraseña no cumple los requisitos.', 400);
+        }
+
+        // Se exige la contraseña actual: sin ella, cualquiera con la sesión
+        // abierta (o un CSRF) podría cambiarla sin saber la vigente.
+        $st = db()->prepare("SELECT password_hash FROM usuario WHERE id = ?");
+        $st->execute([$u['id']]);
+        $hash = $st->fetchColumn();
+        if ($hash === false || !password_verify((string)($d['passwordActual'] ?? ''), $hash)) {
+            json_error('La contraseña actual no es correcta.', 400);
+        }
+
+        db()->prepare("UPDATE usuario SET password_hash = ? WHERE id = ?")
+           ->execute([password_hash($nueva, PASSWORD_DEFAULT), $u['id']]);
+        json_out(['ok' => true]);
+    }
+
+    default:
+        json_error('Acción no reconocida.', 404);
+}

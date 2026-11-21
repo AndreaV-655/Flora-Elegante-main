@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentos de proveedores — Flora Elegante</title>
+    <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+    <script src="vendor/tailwind.js"></script>
+    <script src="js/tailwind-config.js"></script>
+    <link href="vendor/fonts/fonts.css" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="empleado" class="bg-cream font-body text-charcoal">
+
+    <header class="bg-forest text-white sticky top-0 z-40 shadow-lg">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <img src="img/logo.svg" alt="Logo Flora Elegante" class="w-10 h-10">
+                <div>
+                    <p class="font-display font-bold text-lg leading-tight">Flora Elegante</p>
+                    <p class="text-white/50 text-xs">Verificación de comprobantes</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-5">
+                <div class="flex items-center gap-2">
+                    <button id="langToggle" class="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-white/30 hover:border-gold hover:text-gold transition" aria-label="Cambiar idioma">EN</button>
+                    <button id="curToggle" class="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-white/30 hover:border-gold hover:text-gold transition" aria-label="Cambiar moneda">USD</button>
+                </div>
+                <div id="navAuth" class="flex items-center gap-4"></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-12">
+        <section class="mb-10">
+            <p class="text-terra tracking-[0.2em] uppercase text-sm mb-3">Módulo de empleado</p>
+            <h1 class="font-display font-bold text-4xl text-charcoal">Facturas y comprobantes</h1>
+            <div class="w-20 h-0.5 bg-gold mt-4"></div>
+            <p class="text-muted mt-4 max-w-3xl">Sube la foto o el PDF de una factura de proveedor. La IA propone los datos y <strong>tú siempre confirmas</strong> antes de guardarlos. Los archivos se guardan con acceso restringido y se eliminan junto con el registro cuando la empresa lo solicite.</p>
+        </section>
+
+        <div class="grid lg:grid-cols-2 gap-8">
+            <section class="bg-white rounded-2xl border border-bord shadow-sm p-6">
+                <h2 class="font-display font-bold text-2xl mb-4"><i class="fa-solid fa-camera text-gold mr-2"></i>1. Capturar documento</h2>
+                <label for="docFile" class="block border-2 border-dashed border-bord rounded-xl p-8 text-center cursor-pointer hover:border-leaf transition">
+                    <i class="fa-solid fa-file-arrow-up text-3xl text-leaf"></i>
+                    <span class="block mt-3 font-bold text-sm">Tomar foto o elegir archivo</span>
+                    <span class="block text-xs text-muted mt-1">JPG, PNG, WebP o PDF de una página · máximo 5 MB</span>
+                    <input id="docFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" class="hidden">
+                </label>
+                <div id="docPreview" class="hidden mt-4 rounded-xl border border-bord p-3 bg-cream/50">
+                    <img id="docPreviewImg" alt="Vista previa del documento" class="hidden max-h-64 mx-auto rounded-lg">
+                    <p id="docPreviewName" class="text-sm text-muted text-center break-all"></p>
+                </div>
+                <label class="flex items-start gap-2 mt-4 text-xs text-muted">
+                    <input id="docConsent" type="checkbox" class="mt-0.5">
+                    <span>Autorizo enviar la imagen a Cloudflare para extraer su texto y el texto a Pollinations para organizar los datos de la factura. Se guardarán la imagen procesada, el texto y los datos propuestos con acceso restringido.</span>
+                </label>
+                <label class="flex items-start gap-2 mt-3 text-sm text-muted">
+                    <input id="docAnonimizado" type="checkbox" class="mt-0.5">
+                    <span>He ocultado los datos personales (identificaciones, direcciones, teléfonos, correos y firmas). El sistema no los oculta automáticamente.</span>
+                </label>
+                <button id="docAnalyze" type="button" class="btn-primary w-full mt-4">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Analizar con IA
+                </button>
+                <p class="text-sm text-muted mt-3">Revisa todos los campos. La confianza es una estimación de la IA; la factura solo se confirma cuando tú lo indicas.</p>
+            </section>
+
+            <section class="bg-white rounded-2xl border border-bord shadow-sm p-6">
+                <h2 class="font-display font-bold text-2xl mb-4"><i class="fa-solid fa-pen-to-square text-gold mr-2"></i>2. Revisar y confirmar</h2>
+                <div id="docConfidence" class="hidden mb-4 p-3 rounded-xl text-sm"></div>
+                <details class="mb-4 border border-bord rounded-lg p-3">
+                    <summary class="cursor-pointer font-bold text-sm">Ver texto extraído</summary>
+                    <pre id="docOcrText" class="whitespace-pre-wrap break-words text-sm mt-3 max-h-64 overflow-auto" aria-live="polite">Todavía no hay texto extraído.</pre>
+                </details>
+                <form id="docForm" class="space-y-4" novalidate>
+                    <div>
+                        <label class="block mb-1 text-sm font-bold" for="docProveedor">Proveedor</label>
+                        <input id="docProveedor" name="proveedor" maxlength="120" class="w-full border border-bord rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-leaf focus:ring-2 focus:ring-leaf/20">
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block mb-1 text-sm font-bold" for="docNumero">Número de factura</label>
+                            <input id="docNumero" name="numero_factura" maxlength="60" class="w-full border border-bord rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-leaf focus:ring-2 focus:ring-leaf/20">
+                        </div>
+                        <div>
+                            <label class="block mb-1 text-sm font-bold" for="docFecha">Fecha</label>
+                            <input id="docFecha" name="fecha" type="date" class="w-full border border-bord rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-leaf focus:ring-2 focus:ring-leaf/20">
+                        </div>
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block mb-1 text-sm font-bold" for="docTotal">Total</label>
+                            <input id="docTotal" name="total" type="number" min="0" step="0.01" class="w-full border border-bord rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-leaf focus:ring-2 focus:ring-leaf/20">
+                        </div>
+                        <div>
+                            <label class="block mb-1 text-sm font-bold" for="docMoneda">Moneda</label>
+                            <input id="docMoneda" name="moneda" maxlength="3" placeholder="MXN" class="w-full border border-bord rounded-lg px-3 py-2.5 text-sm uppercase focus:outline-none focus:border-leaf focus:ring-2 focus:ring-leaf/20">
+                        </div>
+                    </div>
+                    <p id="docExplanation" class="text-xs text-muted"></p>
+                    <div class="flex gap-3">
+                        <button id="docConfirm" type="submit" class="btn-primary flex-1" disabled>
+                            <i class="fa-solid fa-circle-check mr-2"></i>Confirmar datos
+                        </button>
+                        <button id="docCancel" type="button" class="px-5 py-2.5 rounded-lg border border-bord text-sm font-bold text-muted hover:bg-cream transition">Limpiar</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        <section class="mt-12">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-display font-bold text-2xl">Historial reciente</h2>
+                <button id="docRefresh" class="text-sm font-bold text-leaf hover:text-leaf-light transition"><i class="fa-solid fa-rotate mr-1"></i>Actualizar</button>
+            </div>
+            <div id="docHistory" class="space-y-3">
+                <p class="text-muted text-sm">Cargando documentos…</p>
+            </div>
+        </section>
+    </main>
+
+    <div id="toastContainer" class="fixed top-24 right-6 z-[110] space-y-3 pointer-events-none"></div>
+
+    <script src="js/i18n.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/empleado.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

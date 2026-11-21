@@ -1,0 +1,14 @@
+# Usar en un servidor con dominio propio y puertos 80/443 disponibles.
+services:
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Define SITE_DOMAIN con tu dominio}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+    depends_on: [web]
+volumes:
+  certificates:

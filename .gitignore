@@ -1,0 +1,14 @@
+# Secretos locales (claves de API, contraseñas) — nunca versionar
+api/secretos.php
+
+# Archivos del sistema / temporales
+.DS_Store
+Thumbs.db
+*.log
+.env
+.venv/
+__pycache__/
+engine/private/
+private/
+tests/results/
+.vercel/
